@@ -179,8 +179,17 @@ def get_semantic_version(qt_ver: str, is_preview: bool) -> Optional[Version]:
     As of May 2021, the version strings at https://download.qt.io/online/qtsdkrepository
     conform to this pattern; they are not guaranteed to do so in the future.
     """
-    if not qt_ver or any(not ch.isdigit() for ch in qt_ver):
+    if not qt_ver or any(not ch.isdigit() and ch != '.' for ch in qt_ver):
         return None
+
+    if '.' in qt_ver:
+        parts = qt_ver.split(".")
+        if len(parts) == 3:
+            return Version(major=int(parts[0]), minor=int(parts[1]), patch=int(parts[2]))
+        elif len(parts) == 2:
+            return Version(major=int(parts[0]), minor=int(parts[1]), patch=0)
+    
+    # Handle older versions without dots (e.g., 600 -> 6.0.0)
     if is_preview:
         return Version(
             major=int(qt_ver[:1]),
@@ -194,7 +203,8 @@ def get_semantic_version(qt_ver: str, is_preview: bool) -> Optional[Version]:
         return Version(major=int(qt_ver[:1]), minor=int(qt_ver[1:2]), patch=int(qt_ver[2:]))
     elif len(qt_ver) == 2:
         return Version(major=int(qt_ver[:1]), minor=int(qt_ver[1:2]), patch=0)
-    raise ValueError("Invalid version string '{}'".format(qt_ver))
+
+    raise ValueError(f"Invalid version string '{qt_ver}'")
 
 
 class ArchiveId:
@@ -783,9 +793,14 @@ class MetadataFactory:
 
     def get_versions_extensions(self, html_doc: str, category: str) -> Iterator[Tuple[Optional[Version], str]]:
         def folder_to_version_extension(folder: str) -> Tuple[Optional[Version], str]:
-            components = folder.split("_", maxsplit=2)
+            components = folder.split("_")
+            if len(components) > 2 and components[0].startswith("qt"):
+                version_string = ".".join(components[1:4])
+            else:
+                version_string = components[1] if len(components) >= 2 else ""
+
             ext = "" if len(components) < 3 else components[2]
-            ver = "" if len(components) < 2 else components[1]
+
             return (
                 get_semantic_version(qt_ver=ver, is_preview="preview" in ext),
                 ext,
